@@ -206,19 +206,26 @@ while [ "$start_bitrate" -gt 0 ]; do
         log "SSIM did not change. Using minimum decrement step."
         decrement_step=$min_decrement
     else
-        # Calculate decrement factor and step
-        decrement_factor=$(echo "scale=6; $ssim_target_diff / $ssim_change" | bc | awk '{printf "%.6f", $0}')
-        decrement_step=$(echo "$decrement_factor * $min_decrement" | bc | awk '{printf "%d", $0}')
-        
-        # Cap the decrement_step to a reasonable multiple of min_decrement (e.g., 10x)
-        max_decrement=$((min_decrement * 10))
-        if [ "$decrement_step" -gt "$max_decrement" ]; then
-            log "Decrement step capped to ${max_decrement}k (10x min_decrement)."
-            decrement_step=$max_decrement
+        # Ensure both values are numeric before division
+        if [[ "$ssim_target_diff" =~ ^[0-9.]+$ ]] && [[ "$ssim_change" =~ ^[0-9.]+$ ]]; then
+            decrement_factor=$(echo "scale=6; $ssim_target_diff / $ssim_change" | bc | awk '{printf "%.6f", $0}')
+            decrement_step=$(echo "$decrement_factor * $min_decrement" | bc | awk '{printf "%d", $0}')
+        else
+            log "Invalid SSIM delta detected. Using minimum decrement step."
+            decrement_step=$min_decrement
         fi
-
-        # Ensure decrement_step is at least min_decrement
-        if [ "$decrement_step" -lt "$min_decrement" ]; then
+    
+        # Cap decrement_step
+        max_decrement=$((min_decrement * 10))
+        if [[ "$decrement_step" =~ ^[0-9]+$ ]]; then
+            if [ "$decrement_step" -gt "$max_decrement" ]; then
+                log "Decrement step capped to ${max_decrement}k (10x min_decrement)."
+                decrement_step=$max_decrement
+            elif [ "$decrement_step" -lt "$min_decrement" ]; then
+                decrement_step=$min_decrement
+            fi
+        else
+            log "Decrement step not a valid number. Using minimum decrement step."
             decrement_step=$min_decrement
         fi
     fi
