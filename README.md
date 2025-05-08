@@ -18,7 +18,7 @@ This script intelligently re-encodes a video file using NVIDIA's NVENC encoder t
 ## Usage
 ```bash
 ./ssim-video-optimizer.sh <input_video>
-
+```
 ## Notes
 1. Screen-capture a video at 60fps or match your screen refresh rate if higher
 2. Trim the video at the end if necessary using:
