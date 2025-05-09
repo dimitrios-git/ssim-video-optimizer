@@ -52,8 +52,14 @@ for index in "${!audio_streams[@]}"; do
     fi
 done
 
-framerate=$(ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=noprint_wrappers=1:nokey=1 "$input_file")
-framerate=$(echo "scale=2; $framerate" | bc)
+# capture the raw frame-rate string (e.g. "24000/1001", "25/1", etc.)
+raw_framerate=$(ffprobe -v error -select_streams v:0 \
+  -show_entries stream=r_frame_rate \
+  -of default=noprint_wrappers=1:nokey=1 \
+  "$input_file")
+
+# now convert to a decimal for GOP calculations
+framerate=$(echo "scale=2; $raw_framerate" | bc)
 framerate_rounded=$(echo "scale=0; ($framerate + 0.5) / 1" | bc)
 gop_size=$(echo "scale=0; $framerate_rounded / 2" | bc)
 (( $(echo "$gop_size < 1" | bc -l) )) && gop_size=1
@@ -96,7 +102,7 @@ while [ "$current_qp" -le "$max_qp" ]; do
     log "Encoding with QP: $current_qp..."
 
     ffmpeg -hwaccel cuda -i "$input_file" \
-      -r 24000/1001 \
+      -r "$raw_framerate" \
       -map 0 -map_metadata 0 \
       -c:v h264_nvenc -pix_fmt yuv420p -bf 2 -g "$gop_size" -coder 1 \
       -movflags +faststart -preset p7 -qp "$current_qp" \
@@ -110,8 +116,11 @@ while [ "$current_qp" -le "$max_qp" ]; do
     previous_file="$current_file"
     current_file="$output_file"
 
-    ssim_value=$(ffmpeg -i "$input_file" -i "$output_file" -filter_complex ssim -f null - 2>&1 | \
-                 grep "All:" | sed -E 's/.*All:([0-9.]+).*/\1/')
+    ssim_value=$(
+      ffmpeg -i "$input_file" -i "$output_file" -filter_complex ssim -f null - 2>&1 |
+        grep "All:" |
+        sed -E 's/.*All:([0-9.]+).*/\1/'
+    )
 
     log "SSIM for QP ${current_qp}: $ssim_value"
 
