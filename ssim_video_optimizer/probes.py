@@ -2,6 +2,7 @@
 import json
 from .utils import run_cmd
 
+
 def probe_audio_streams(input_file: str) -> list:
     cmd = [
         'ffprobe', '-v', 'quiet', '-select_streams', 'a',

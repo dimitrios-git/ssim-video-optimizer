@@ -3,6 +3,7 @@ import os
 from statistics import mean
 from .utils import run_cmd
 
+
 def measure_ssim_on_sample(sample_file: str, qp: int, raw_fr: float, gop: int, audio_opts: list) -> float:
     """
     Re-encode a sample at the given QP (with the proper GOP) and measure SSIM against the original.

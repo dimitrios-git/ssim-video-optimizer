@@ -6,6 +6,7 @@ import tempfile
 from .probes import probe_video_duration
 from .utils import run_cmd
 
+
 def detect_scenes(input_file: str, threshold: float = 0.6) -> list:
     cmd = [
         'ffprobe', '-v', 'quiet', '-f', 'lavfi',

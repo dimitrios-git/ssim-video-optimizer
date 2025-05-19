@@ -2,6 +2,7 @@
 import subprocess
 import logging
 
+
 def run_cmd(cmd, capture_output=False):
     return subprocess.run(
         cmd, check=True,
