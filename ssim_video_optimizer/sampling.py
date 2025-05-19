@@ -2,47 +2,72 @@
 import json
 import os
 import tempfile
+from pathlib import Path
 
 from .probes import probe_video_duration
 from .utils import run_cmd
 
 
+def make_safe_symlink(input_file: str) -> str:
+    """
+    Create a temp symlink to `input_file` in a dir with a safe filename.
+    Returns the symlink path.
+    """
+    tmpdir = tempfile.mkdtemp(prefix="ssim_safe_")
+    ext = Path(input_file).suffix
+    # Build the filename as a normal string:
+    safe_name = f"video{ext}"
+    link_path = Path(tmpdir) / safe_name
+    os.symlink(input_file, link_path)
+    return str(link_path)
+
 def detect_scenes(input_file: str, threshold: float = 0.6) -> list:
+    safe_input = make_safe_symlink(input_file)
+    filter_arg = (
+        f"movie='{safe_input}',"
+        f"select=gt(scene\\,{threshold})"
+    )
     cmd = [
         'ffprobe', '-v', 'quiet', '-f', 'lavfi',
-        f"movie={input_file},select='gt(scene,{threshold})'",
+        filter_arg,
         '-show_entries', 'frame=best_effort_timestamp_time:frame_tags=lavfi.scene_score',
         '-of', 'json'
     ]
-    data = json.loads(run_cmd(cmd, capture_output=True).stdout)
-    times = []
-    for frame in data.get('frames', []):
-        tags = frame.get('tags', {})
-        if 'lavfi.scene_score' in tags:
-            ts = float(frame.get('best_effort_timestamp_time', 0.0))
-            times.append(ts)
-    return times
+    output = run_cmd(cmd, capture_output=True).stdout
+    data = json.loads(output)
+    return [
+        float(f.get('best_effort_timestamp_time', 0.0))
+        for f in data.get('frames', [])
+        if 'lavfi.scene_score' in f.get('tags', {})
+    ]
 
 def detect_motion(input_file: str, top_n: int = 0) -> list:
+    safe_input = make_safe_symlink(input_file)
+    filter_arg = (
+        f"movie='{safe_input}',"
+        "fps=1,"
+        "signalstats,"
+        "metadata=print:key=lavfi.signalstats.YDIF"
+    )
     cmd = [
         'ffprobe', '-v', 'quiet', '-f', 'lavfi',
-        f"movie={input_file},fps=1,signalstats,metadata=print:key=lavfi.signalstats.YDIF",
+        filter_arg,
         '-show_entries', 'frame=pkt_pts_time:frame_tags=lavfi.signalstats.YDIF',
         '-of', 'json'
     ]
-    data = json.loads(run_cmd(cmd, capture_output=True).stdout)
+    output = run_cmd(cmd, capture_output=True).stdout
+    data = json.loads(output)
+
     scores = []
     for frame in data.get('frames', []):
         tags = frame.get('tags', {})
         score = tags.get('lavfi.signalstats.YDIF')
         if score is None:
             continue
-        if 'pkt_pts_time' in frame:
-            ts = float(frame['pkt_pts_time'])
-        else:
-            ts = float(frame.get('best_effort_timestamp_time', 0.0))
+        ts = float(frame.get('pkt_pts_time', frame.get('best_effort_timestamp_time', 0.0)))
         scores.append((float(score), ts))
-    scores.sort(reverse=True, key=lambda x: x[0])
+
+    scores.sort(key=lambda x: x[0], reverse=True)
     times = [t for _, t in scores]
     return times[:top_n] if top_n else times
 
