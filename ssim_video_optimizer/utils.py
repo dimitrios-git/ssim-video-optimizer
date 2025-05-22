@@ -13,16 +13,24 @@ def run_cmd(cmd, capture_output=False):
 
 def build_audio_options(streams: list) -> list:
     opts = []
+    target_bitrate_kbps = 192
     for s in streams:
         i = s['index']
         codec = s.get('codec_name', '')
-        br = int(s.get('bit_rate') or 0)
-        ch = int(s.get('channels') or 0)
-        if codec != 'aac' and br > 0:
-            kb = br // 1000
-            opts += [f'-c:a:{i}', 'aac', f'-b:a:{i}', f'{kb}k', f'-ac:{i}', str(ch)]
+        # Always re-encode non-AAC streams at 192 kbps per channel
+        if codec != 'aac':
+            # Use the stream's channel count to maintain layout
+            ch = int(s.get('channels') or 2)
+            opts += [
+                f'-c:a:{i}', 'aac',
+                f'-b:a:{i}', f'{target_bitrate_kbps}k',
+                f'-ac:{i}', str(ch)
+            ]
         else:
-            opts += [f'-c:a:{i}', 'copy']
+            # Copy existing AAC streams
+            opts += [
+                f'-c:a:{i}', 'copy'
+            ]
     return opts
 
 def setup_logging(verbose: bool, log_file: str = None):
